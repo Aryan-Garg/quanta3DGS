@@ -21,3 +21,7 @@ colmap image_undistorter --image_path train-colmap/images/ --input_path train-co
 --- --- --- --- --- --- --- --- --- --- --- --- --- 
 
 4. ./scripts/tog_random_init_cloud.sh
+
+--- --- --- --- --- --- --- --- --- --- --- --- --- 
+
+5. For rendering with SPC data:
