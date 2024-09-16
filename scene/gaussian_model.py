@@ -426,7 +426,8 @@ class GaussianModel:
         self.denom[update_filter] += 1
 
 
-    ### NOTE: Check PyTorch3D for varying distances other than Euclidean --- Could be an ablation study
+    ### NOTE: Check PyTorch3D for varying distances other than Euclidean
+    # Could be an ablation study
     def add_extra_points(self, td = 100., Np: int = 100_000, K: int = 4) -> None:
         """
             Np points are sampled from an uniform distribution U (α, β) where α and β are
@@ -479,12 +480,6 @@ class GaussianModel:
                 new_scaling.append((valid_distances[:,None]*self._scaling[valid_indices]).mean(0))
                 new_rotation.append((valid_distances[:,None]*self._rotation[valid_indices]).mean(0))
                 new_points.append(new_point_xyz[0])
-              
-
-        
-
-         
-
 
             # Linearly interpolate: features, opacity, rotation, scaling etc. from the 4 NNs
             # based on the Euclidean distance from current xyz to the new point.
