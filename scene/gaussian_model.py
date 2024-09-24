@@ -432,7 +432,9 @@ class GaussianModel:
         """
             Np points are sampled from an uniform distribution U (α, β) where α and β are
             the minimum and maximum value of the position of the points from the existing point
-            cloud, respectively. Add Np points within td distance uniformly using KNN.
+            cloud, respectively. 
+            
+            Add Np points within td distance uniformly using KNN.
         """
         
         current_pcd = self.get_xyz # N x 3
@@ -495,7 +497,6 @@ class GaussianModel:
 
             
         # Add to main point cloud
-      
         new_features_dc =torch.stack(new_features_dc,dim=0).to("cuda:0")
         new_features_dc.requires_grad=True
      
@@ -510,14 +511,11 @@ class GaussianModel:
 
         new_points = torch.stack(new_points,dim=0).to("cuda:0")
         new_points.requires_grad = True 
-
+    
         new_rotation = torch.stack(new_rotation,dim=0).to("cuda:0")
         new_rotation.requires_grad = True 
         print(f"percetage of Np points valid {count / Np * 100}")
-     
     
-    
-
         self.densification_postfix(new_points, new_features_dc, new_features_rest, 
                                    new_opacities, new_scaling, new_rotation)
         print(f"\n[-] After AddPoints num points: {self.get_xyz.shape[0]}")

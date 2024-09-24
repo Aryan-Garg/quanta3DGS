@@ -1,14 +1,3 @@
-#
-# Copyright (C) 2023, Inria
-# GRAPHDECO research group, https://team.inria.fr/graphdeco
-# All rights reserved.
-#
-# This software is free for non-commercial, research and evaluation use 
-# under the terms of the LICENSE.md file.
-#
-# For inquiries contact  george.drettakis@inria.fr
-#
-
 import os
 import sys
 from PIL import Image
@@ -23,6 +12,7 @@ from plyfile import PlyData, PlyElement
 from utils.sh_utils import SH2RGB
 from scene.gaussian_model import BasicPointCloud
 
+
 class CameraInfo(NamedTuple):
     uid: int
     R: np.array
@@ -35,12 +25,14 @@ class CameraInfo(NamedTuple):
     width: int
     height: int
 
+
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
     train_cameras: list
     test_cameras: list
     nerf_normalization: dict
     ply_path: str
+
 
 def getNerfppNorm(cam_info):
     def get_center_and_diag(cam_centers):
@@ -64,6 +56,7 @@ def getNerfppNorm(cam_info):
     translate = -center
 
     return {"translate": translate, "radius": radius}
+
 
 def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
     cam_infos = []
@@ -104,6 +97,7 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
     sys.stdout.write('\n')
     return cam_infos
 
+
 def fetchPly(path):
     plydata = PlyData.read(path)
     vertices = plydata['vertex']
@@ -111,6 +105,7 @@ def fetchPly(path):
     colors = np.vstack([vertices['red'], vertices['green'], vertices['blue']]).T / 255.0
     normals = np.vstack([vertices['nx'], vertices['ny'], vertices['nz']]).T
     return BasicPointCloud(points=positions, colors=colors, normals=normals)
+
 
 def storePly(path, xyz, rgb):
     # Define the dtype for the structured array
@@ -128,6 +123,7 @@ def storePly(path, xyz, rgb):
     vertex_element = PlyElement.describe(elements, 'vertex')
     ply_data = PlyData([vertex_element])
     ply_data.write(path)
+
 
 def readColmapSceneInfo(path, images, eval, llffhold=8):
     try:
@@ -209,6 +205,7 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
                            ply_path=ply_path)
     return scene_info
 
+
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png"):
     cam_infos = []
 
@@ -265,7 +262,10 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
     #     train_cam_infos.extend(test_cam_infos)
     #     test_cam_infos = []
 
+    # TODO: Manually set this radius and translate for each scene
     nerf_normalization = getNerfppNorm(train_cam_infos)
+    # nerf_normalization = {"translate": np.array([ 1.4786322, -1.8539913, -1.5134931]), "radius": 50.0}
+    print("Nerf normalization dict:", nerf_normalization)
 
     ply_path = os.path.join(path, "points3d.ply")
     if not os.path.exists(ply_path):

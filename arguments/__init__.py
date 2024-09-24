@@ -65,7 +65,6 @@ class ModelParams(ParamGroup):
         self.affine_color_fit = True 
         self.color_correct = True
        
-       
         super().__init__(parser, "Loading Parameters", sentinel)
 
     def extract(self, args):
