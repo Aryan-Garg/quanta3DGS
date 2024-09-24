@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import os
+import numpy as np
+from PIL import Image
 import torch
 from random import randint
 from utils.loss_utils import l1_loss, ssim
@@ -43,6 +45,10 @@ def loss_fn(pred_image, gt_image, lambda_dssim, mode):
         Ll1 = l1_loss(pred_image, gt_image)
         loss = (1.0 - lambda_dssim) * Ll1 + lambda_dssim * (1.0 - ssim(pred_image, gt_image))
         return loss 
+    if mode == "binary":
+        Ll1 = l1_loss(pred_image, gt_image)
+        loss = Ll1
+        return loss
         
 
 def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint,  debug_from):
@@ -71,6 +77,12 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
 
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device=dataset.data_device)
+
+    if dataset.is_binary:
+        DATA_PATH = "/nobackup3/aryan/dataset/binary/f1000/"
+        SPLIT = "train"
+        data_npy = np.load(DATA_PATH+SPLIT+"/frames.npy", mmap_mode="r")
+
 
     iter_start = torch.cuda.Event(enable_timing = True)
     iter_end = torch.cuda.Event(enable_timing = True)
@@ -125,12 +137,25 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
             gt_image_raw = viewpoint_cam.original_image_raw.cuda()
             pred_image_raw = torch.clamp(image, 0., 1.)
             loss = loss_fn(pred_image_raw,gt_image_raw,opt.lambda_dssim,dataset.loss_mode)
+        elif dataset.is_binary: 
+            # NOTE: Read bin-image, never elsewhere     >>> DONE
+            # NOTE: Add dataset.is_binary flag          >>> DONE
+            bin_img = np.unpackbits(data_npy[int(viewpoint_cam.image_name)], axis=1)
+            # DOn't need this: 
+            # .convert("RGBA") / 255.
+            # bg = np.array([1,1,1]) if dataset.white_background else np.array([0, 0, 0])
+            # arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
+            gt_image = torch.from_numpy(bin_img).cuda().permute(2,0,1)
+            # print(gt_image.shape)
+            pred_image = torch.clamp(image,0.,1.)
+            # print(pred_image.shape)
+            # loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, dataset.loss_mode)
+            loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "binary")
         else:
             gt_image = viewpoint_cam.original_image.cuda()
             pred_image = torch.clamp(image,0.,1.)
             loss = loss_fn(pred_image,gt_image,opt.lambda_dssim,dataset.loss_mode)
         loss.backward()
-     
 
         iter_end.record()
 

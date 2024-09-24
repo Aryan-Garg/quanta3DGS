@@ -233,6 +233,7 @@ def readColmapSceneInfo(path, images, eval, denoise_method, llffhold=8):
                            nerf_normalization=nerf_normalization,
                            ply_path=ply_path)
     return scene_info
+
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png"):
     cam_infos = []
 

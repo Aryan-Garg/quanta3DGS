@@ -9,7 +9,7 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
-from scene.cameras import Camera, CameraRAW
+from scene.cameras import Camera, CameraRAW, CameraBin
 import numpy as np
 from utils.general_utils import PILtoTorch, NPtoTorch
 from utils.graphics_utils import fov2focal
@@ -21,8 +21,10 @@ def loadCam(args, id, cam_info, resolution_scale):
         orig_w, orig_h = cam_info.raw_image.shape[1], cam_info.raw_image.shape[0]
       
     else:
-        orig_w, orig_h = cam_info.image.size
+        # NOTE ToG: original was L25. New is L27.
+        # orig_w, orig_h = cam_info.image.size
         # print("Correct", orig_w, orig_h)
+        orig_w, orig_h = cam_info.width, cam_info.height
 
     if args.resolution in [1, 2, 4, 8]:
         resolution = round(orig_w/(resolution_scale * args.resolution)), round(orig_h/(resolution_scale * args.resolution))
@@ -43,9 +45,6 @@ def loadCam(args, id, cam_info, resolution_scale):
         scale = float(global_down) * float(resolution_scale)
         resolution = (int(orig_w / scale), int(orig_h / scale))
 
-  
-   
-    
     if args.is_raw:
         resized_image_raw = NPtoTorch(cam_info.raw_image, resolution)
         gt_raw_image = resized_image_raw[:3, ...]
@@ -54,6 +53,17 @@ def loadCam(args, id, cam_info, resolution_scale):
                     FoVx=cam_info.FovX, FoVy=cam_info.FovY,raw_image=gt_raw_image, 
                     image_name=cam_info.image_name, uid=id, data_device=args.data_device, meta =  cam_info.meta, post_fn = cam_info.post_fn)
     
+    elif args.is_binary:
+        return CameraBin(colmap_id=cam_info.uid, 
+                         R=cam_info.R, 
+                         T=cam_info.T, 
+                         FoVx=cam_info.FovX, FoVy=cam_info.FovY, 
+                        # NOTE:  image=gt_image, 
+                         image_path=cam_info.image_path,
+                         image_name=cam_info.image_name, 
+                         uid=id, 
+                         data_device=args.data_device)
+
     else:
         resized_image_rgb = PILtoTorch(cam_info.image, resolution)
         gt_image = resized_image_rgb[:3, ...]

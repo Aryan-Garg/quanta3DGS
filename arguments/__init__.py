@@ -57,6 +57,7 @@ class ModelParams(ParamGroup):
         self.data_device = "cuda:0"
         self.eval = False
         self.is_raw = False
+        self.is_binary = False
         self.add_points = False 
         # self.H = 3024
         # self.W = 4032
@@ -97,9 +98,9 @@ class OptimizationParams(ParamGroup):
         self.densification_interval = 100
         self.opacity_reset_interval = 3000
         self.densify_from_iter = 500
-        self.densify_until_iter = 15_000 #15_000 
-        self.densify_grad_threshold = 0.0002 # 0.0002
-        self.opacity_thresh = 0.005 #0.005
+        self.densify_until_iter = 15_000 # 15_000 
+        self.densify_grad_threshold = 0.0002 # 0.0002 
+        self.opacity_thresh = 0.005 #0.005 
         self.point_sample_interval = 5000
         self.random_background = False
         # self.l1_weight = 0.
