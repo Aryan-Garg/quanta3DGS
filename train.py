@@ -202,7 +202,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
                 # Paper implementations: Deblurring Gaussians
                 if dataset.add_points and iteration % opt.point_sample_interval == 0 and iteration < opt.densify_until_iter: # N_st
                     start = time.time()
-                    gaussians.add_extra_points() 
+                    gaussians.add_extra_points(Np = 20_000)  # Play around with Np. Curr: 100_000
                     end = time.time()
                     print("Extra Points Time:", end-start, "seconds")
 
