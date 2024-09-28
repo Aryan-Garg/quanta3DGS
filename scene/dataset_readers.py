@@ -186,6 +186,7 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
         test_cam_infos = []
 
     nerf_normalization = getNerfppNorm(train_cam_infos)
+    # print("Nerf normalization: ", nerf_normalization)
 
     ply_path = os.path.join(path, "sparse/0/points3D.ply")
     bin_path = os.path.join(path, "sparse/0/points3D.bin")
@@ -267,6 +268,7 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
     #     test_cam_infos = []
 
     nerf_normalization = getNerfppNorm(train_cam_infos)
+    print("Nerf normalization: ", nerf_normalization)
 
     ply_path = os.path.join(path, "points3d.ply")
     if not os.path.exists(ply_path):

@@ -11,6 +11,7 @@ from pathlib import Path
 from plyfile import PlyData, PlyElement
 from utils.sh_utils import SH2RGB
 from scene.gaussian_model import BasicPointCloud
+import random
 
 
 class CameraInfo(NamedTuple):
@@ -246,9 +247,15 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
             FovX = fovx
 
             cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, 
-                            image_path=image_path, image_name=image_name, width=width, height=height))
-            
+                            image_path=image_path, image_name=image_name, 
+                            width=width, height=height))
+    
+    # NOTE: Added: Shuffling the cameras to make sure the scene is covered 
+    # cams >> iterations
+    random.shuffle(cam_infos)
+
     return cam_infos
+
 
 def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
     print("Reading Training Transforms")
@@ -262,16 +269,19 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
     #     train_cam_infos.extend(test_cam_infos)
     #     test_cam_infos = []
 
-    # TODO: Manually set this radius and translate for each scene
-    nerf_normalization = getNerfppNorm(train_cam_infos)
-    # nerf_normalization = {"translate": np.array([ 1.4786322, -1.8539913, -1.5134931]), "radius": 50.0}
-    print("Nerf normalization dict:", nerf_normalization)
+
+    nerf_normalization = getNerfppNorm(train_cam_infos)    
+    # Numbers from moped RGB scene run 
+    # nerf_normalization = {'translate': np.array([ 0.00519361,  0.02486794, -0.07495658], dtype=np.float32), 
+                        #   'radius': 6.1275053024292}
+    
+    print("[+] Nerf normalization dict:", nerf_normalization)
 
     ply_path = os.path.join(path, "points3d.ply")
-    if not os.path.exists(ply_path):
+    if not os.path.exists(ply_path): # SKIP this for now
         # Since this data set has no colmap data, we start with random points
         num_pts = 100_000
-        print(f"Generating random point cloud ({num_pts})...")
+        print(f"[-] Generating random point cloud ({num_pts})...")
         
         # We create random points inside the bounds of the synthetic Blender scenes
         xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
@@ -280,9 +290,12 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
 
         storePly(ply_path, xyz, SH2RGB(shs) * 255)
     try:
+        # NOTE: Hard coded PCD from RGB scene
         pcd = fetchPly(ply_path)
+        print(f"[+] Point cloud loaded from {ply_path}")
     except:
         pcd = None
+        print("[-] Could not read the point cloud from the .ply file. pcd is None.")
 
     scene_info = SceneInfo(point_cloud=pcd,
                            train_cameras=train_cam_infos,
