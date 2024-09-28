@@ -6,5 +6,5 @@ export CUDA_VISIBLE_DEVICES=1
 #  --opacity_lr 0.001 --feature_lr 0.0001 --sh_degree 2
 
 
-python train.py -s /nobackup3/aryan/dataset --is_graded --densify_until_iter 7000
+python train.py -s /nobackup3/aryan/dataset --is_graded --densify_until_iter 8000
 #  --position_lr_init 0.00008 --opacity_lr 0.01 
