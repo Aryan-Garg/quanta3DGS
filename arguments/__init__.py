@@ -58,7 +58,8 @@ class ModelParams(ParamGroup):
         self.eval = False
         self.is_raw = False
         self.is_binary = False
-        self.add_points = False 
+        self.add_points = False
+        self.is_graded = False 
         # self.H = 3024
         # self.W = 4032
         # self.finetune_iteration = 30_000
@@ -96,7 +97,7 @@ class OptimizationParams(ParamGroup):
         self.lambda_dssim = 0.2
         self.densification_interval = 100
         self.opacity_reset_interval = 3000
-        self.densify_from_iter = 500
+        self.densify_from_iter = 500 # 500
         self.densify_until_iter = 15_000 # 15_000 
         self.densify_grad_threshold = 0.0002 # 0.0002 
         self.opacity_thresh = 0.005 #0.005 

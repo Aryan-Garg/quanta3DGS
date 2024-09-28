@@ -46,19 +46,22 @@ def loss_fn(pred_image, gt_image, lambda_dssim, mode):
         loss = (1.0 - lambda_dssim) * Ll1 + lambda_dssim * (1.0 - ssim(pred_image, gt_image))
         return loss 
     if mode == "binary":
+        # print("Calc. L1 Loss ...")
         Ll1 = l1_loss(pred_image, gt_image)
+        # loss = (1.0 - lambda_dssim) * Ll1 + lambda_dssim * (1.0 - ssim(pred_image, gt_image))
         loss = Ll1
         return loss
         
 
-def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint,  debug_from):
+def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_iterations, 
+             checkpoint_iterations, checkpoint,  debug_from):
     
    
     first_iter = 0
     res = args.resolution if args.resolution != -1 else -args.resolution
     is_raw = dataset.is_raw
     add_points = dataset.add_points
- 
+
     # print(opt.feature_lr)
     # print(opt.position_lr_init)
     # print(opt.scaling_lr)
@@ -72,9 +75,12 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
     # sys.exit()
     gaussians.training_setup(opt)
     if checkpoint:
-        (model_params, first_iter) = torch.load(checkpoint)
-        gaussians.restore(model_params, opt)
+        # (model_params, first_iter) = torch.load(checkpoint)
+        gaussians.load_ply(checkpoint)
+        first_iter = 7000
+        print(f"Loaded checkpoint {checkpoint} at iteration {first_iter}")
 
+    
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device=dataset.data_device)
 
@@ -82,12 +88,29 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         DATA_PATH = "/nobackup3/aryan/dataset/binary/f1000/"
         SPLIT = "train"
         data_npy = np.load(DATA_PATH+SPLIT+"/frames.npy", mmap_mode="r")
+    os.makedirs("temp_bin", exist_ok=True)
 
+    if dataset.is_graded: # pre-load all npys on disk
+        DATA_PATH = "/nobackup3/aryan/dataset/"
+        data_npy_025 = np.load(DATA_PATH+"moped_rgb0025/frames.npy", mmap_mode="r")
+        data_npy_050 = np.load(DATA_PATH+"moped_rgb0050/frames.npy", mmap_mode="r")
+        data_npy_100 = np.load(DATA_PATH+"moped_rgb0100/frames.npy", mmap_mode="r")
+        data_npy_200 = np.load(DATA_PATH+"moped_rgb0200/frames.npy", mmap_mode="r")
+        data_npy_binary = np.load(DATA_PATH+"binary/f1000/train/frames.npy", mmap_mode="r")
 
     iter_start = torch.cuda.Event(enable_timing = True)
     iter_end = torch.cuda.Event(enable_timing = True)
 
-    viewpoint_stack = None
+    viewpoint_stack = scene.getTrainCameras().copy()
+    sample_cam_intervals = [0]
+    this_iter = 0
+    for i in range(len(viewpoint_stack)):
+        if viewpoint_stack[i].iterate_after != this_iter:
+            sample_cam_intervals.append(i)
+            this_iter = viewpoint_stack[i].iterate_after
+    sample_cam_intervals.append(len(viewpoint_stack)-1)
+    print("\n[+] Sample Cam Intervals:", sample_cam_intervals)    
+
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
     first_iter += 1
@@ -114,12 +137,37 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         # Every 1000 its we increase the levels of SH up to a maximum degree
         if iteration % 1000 == 0:
             gaussians.oneupSHdegree()
-        # Finetune on L1 scaled loss for last 5K iterations 
 
-        # Pick a random Camera
-        if not viewpoint_stack:
-            viewpoint_stack = scene.getTrainCameras().copy()
-        viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
+        if iteration % 6000 == 0:
+            # And clause to keep the lr same after 20k.
+            # After 20k, is the binary dataset training
+            gaussians.update_other_learning_rates(iteration, factor=0.5) 
+            # other lrs means apart from position. 
+            # Which already has a scheduler
+
+        
+        # if not viewpoint_stack:
+        #     viewpoint_stack = scene.getTrainCameras().copy()
+        # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
+        if iteration < 6000:
+            viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[0], 
+                                                    sample_cam_intervals[1])]
+        elif iteration < 12000:
+            viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[1], 
+                                                    sample_cam_intervals[2])]
+        elif iteration < 18000:
+            viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[2], 
+                                                    sample_cam_intervals[3])]
+        elif iteration < 24000:
+            viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[3], 
+                                                    sample_cam_intervals[4])]
+        else:
+            viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[4], 
+                                                    sample_cam_intervals[5])]
+        
+        # print("Viewpoint Cam:", viewpoint_cam.image_name, 
+        #       "Iteration:",     iteration, 
+        #       "Iterate After:", viewpoint_cam.iterate_after)
 
         # Render
         if (iteration - 1) == debug_from:
@@ -145,12 +193,33 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
             # .convert("RGBA") / 255.
             # bg = np.array([1,1,1]) if dataset.white_background else np.array([0, 0, 0])
             # arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
-            gt_image = torch.from_numpy(bin_img).cuda().permute(2,0,1)
-            # print(gt_image.shape)
+            # Save bin_img
+
+            gt_image = torch.from_numpy(bin_img).float().cuda().permute(2,0,1)
             pred_image = torch.clamp(image,0.,1.)
-            # print(pred_image.shape)
+            # print(pred_image.shape, gt_image.shape) [3, 800, 800] [3, 800, 800]
             # loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, dataset.loss_mode)
             loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "binary")
+
+        elif dataset.is_graded:
+            pred_image = torch.clamp(image,0.,1.)
+            if viewpoint_cam.iterate_after == 20_000:
+                bin_img = np.unpackbits(data_npy_binary[int(viewpoint_cam.image_name)], axis=1)
+                gt_image = torch.from_numpy(bin_img).float().cuda().permute(2,0,1)
+                loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "binary")
+            elif viewpoint_cam.iterate_after == 15000:
+                gt_image = torch.from_numpy(data_npy_200[int(viewpoint_cam.image_name)] / 255.).float().cuda().permute(2,0,1)
+                loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
+            elif viewpoint_cam.iterate_after == 10000:
+                gt_image = torch.from_numpy(data_npy_100[int(viewpoint_cam.image_name)] / 255.).float().cuda().permute(2,0,1)
+                loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
+            elif viewpoint_cam.iterate_after == 5000:
+                gt_image = torch.from_numpy(data_npy_050[int(viewpoint_cam.image_name)] / 255.).float().cuda().permute(2,0,1)
+                loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
+            elif viewpoint_cam.iterate_after == 0:
+                gt_image = torch.from_numpy(data_npy_025[int(viewpoint_cam.image_name)] / 255.).float().cuda().permute(2,0,1)
+                loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
+        
         else:
             gt_image = viewpoint_cam.original_image.cuda()
             pred_image = torch.clamp(image,0.,1.)
@@ -177,6 +246,17 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         
             #     training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background))
             
+            # Save prediction & ground truth
+            if iteration % 10 == 0: # and dataset.is_binary 
+                pred_image = pred_image.cpu().permute(1,2,0).numpy() * 255.
+                pred_image = Image.fromarray(pred_image.astype(np.uint8))
+                pred_image.save(f"temp_bin/itr{iteration}_pred.png")
+
+                gt_image = gt_image.cpu().permute(1,2,0).numpy() * 255.
+                gt_image = Image.fromarray(gt_image.astype(np.uint8))
+                gt_image.save(f"temp_bin/itr{iteration}_gt.png")
+
+
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
@@ -374,7 +454,9 @@ if __name__ == "__main__":
     network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
 
-    training(lp.extract(args), op.extract(args), pp.extract(args), args.render_iterations, args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
+    training(lp.extract(args), op.extract(args), pp.extract(args), 
+             args.render_iterations, args.test_iterations, args.save_iterations, 
+             args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
 
     # All done
     print("\nTraining complete.")

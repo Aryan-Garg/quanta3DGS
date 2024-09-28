@@ -9,7 +9,7 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
-from scene.cameras import Camera, CameraRAW, CameraBin
+from scene.cameras import Camera, CameraRAW, CameraBin, CameraGraded
 import numpy as np
 from utils.general_utils import PILtoTorch, NPtoTorch
 from utils.graphics_utils import fov2focal
@@ -63,7 +63,17 @@ def loadCam(args, id, cam_info, resolution_scale):
                          image_name=cam_info.image_name, 
                          uid=id, 
                          data_device=args.data_device)
-
+    elif args.is_graded:
+        return CameraGraded(colmap_id=cam_info.uid, 
+                         R=cam_info.R, 
+                         T=cam_info.T, 
+                         FoVx=cam_info.FovX, FoVy=cam_info.FovY, 
+                        # NOTE:  image=gt_image, 
+                         image_path=cam_info.image_path,
+                         image_name=cam_info.image_name, 
+                         iterate_after=cam_info.iterate_after,
+                         uid=id, 
+                         data_device=args.data_device)
     else:
         resized_image_rgb = PILtoTorch(cam_info.image, resolution)
         gt_image = resized_image_rgb[:3, ...]
