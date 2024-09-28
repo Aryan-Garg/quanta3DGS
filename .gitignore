@@ -32,3 +32,4 @@ full_ds_output_2/
 optuna-output/
 denoise-exp/
 *tfevents*
+temp_bin/
