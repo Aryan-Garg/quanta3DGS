@@ -60,6 +60,7 @@ class ModelParams(ParamGroup):
         self.is_binary = False
         self.add_points = False
         self.is_graded = False 
+        self.is_pure_graded = False
         # self.H = 3024
         # self.W = 4032
         # self.finetune_iteration = 30_000

@@ -209,41 +209,73 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
 
 
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png"):
-    dirs_to_do = {"moped_rgb0025": 0, 
-                  "moped_rgb0050": 5_000,
-                  "moped_rgb0100": 10_000,
-                  "moped_rgb0200": 15_000,
-                  "binary/f1000/train": 20_000}
+    splits = [0, 8000, 15000, 21000, 26000]
     cam_infos = []
-    for k, v in dirs_to_do.items():
-        with open(os.path.join(path, k, transformsfile)) as json_file:
-            contents = json.load(json_file)
-            fovx = contents["angle_x"]
-            frames = contents["frames"]
+    with open(os.path.join(path, transformsfile)) as json_file:
+        contents = json.load(json_file)
+        fovx = contents["angle_x"]
+        frames = contents["frames"]
+        # len_frames = len(frames) =~ 800,000
+        chunk_sizes = [40000 // 25, 40000 // 50, 40000 // 100, 40000 // 200, 1] 
+        # chunk size = total_frames // capture_time * fps OR total_frames // num_frames in that fps bucket 
+        # Ex - Our capture time was 20s, fps was 25, so chunk size = 40000 // 25 = 1600
+        for split_idx in range(len(splits)):
             these_cams = []
-            for idx, frame in enumerate(frames):
-                cam_name = str(idx)
-                c2w = np.array(frame["transform_matrix"])
-                c2w[:3, 1:3] *= -1
-                w2c = np.linalg.inv(c2w)
-                R = np.transpose(w2c[:3,:3])  
-                T = w2c[:3, 3]
+            if chunk_sizes[split_idx] == 1: # binary frames. No left_right pairs.
+                for idx in range(0, len(frames)):
+                    cam_name = str(idx)
+                    c2w = np.array(frames[idx]["transform_matrix"])
+                    c2w[:3, 1:3] *= -1
+                    w2c = np.linalg.inv(c2w)
+                    R = np.transpose(w2c[:3,:3])  
+                    T = w2c[:3, 3]
+                    image_path = os.path.join(path, "frames.npy")
 
-                image_path = os.path.join(path, k, "frames.npy")
-                image_name = cam_name
-                width, height = 800, 800
-                # bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
+                    image_name = f"bin_{cam_name}"
+                    width, height = 800, 800
+                    # bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
 
-                fovy = focal2fov(fov2focal(fovx, width), height)
-                FovY = fovy 
-                FovX = fovx
+                    fovy = focal2fov(fov2focal(fovx, width), height)
+                    FovY = fovy 
+                    FovX = fovx
+                    these_cams.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, 
+                                    image_path=image_path, image_name=image_name, 
+                                    width=width, height=height, iterate_after=splits[split_idx]))
+                random.shuffle(these_cams)
+                print(f"Read {len(these_cams)} cameras for split {split_idx}")
+                cam_infos.extend(these_cams)
+            else:
+                for idx in range(0, len(frames), chunk_sizes[split_idx]):
+                    # check if idx + chunk_sizes[split_idx] is within bounds and even
+                    if idx + chunk_sizes[split_idx] >= len(frames):
+                        break
+                    if (idx + chunk_sizes[split_idx]) % 2 != 0:
+                        continue
+                    middle_cam_idx = (idx + chunk_sizes[split_idx]) // 2
+                    cam_name = str(middle_cam_idx)
 
-                these_cams.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, 
-                                image_path=image_path, image_name=image_name, 
-                                width=width, height=height, iterate_after=v))
-            random.shuffle(these_cams)
-            print(f"Read {len(these_cams)} cameras from {k}")
-            cam_infos.extend(these_cams)
+                    c2w = np.array(frames[middle_cam_idx]["transform_matrix"])
+                    c2w[:3, 1:3] *= -1
+                    w2c = np.linalg.inv(c2w)
+                    R = np.transpose(w2c[:3,:3])  
+                    T = w2c[:3, 3]
+                    image_path = os.path.join(path, "frames.npy")
+                    left = idx
+                    right = idx + chunk_sizes[split_idx]
+
+                    image_name = f"{left:06d}_{right:06d}"
+                    width, height = 800, 800
+                    # bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
+
+                    fovy = focal2fov(fov2focal(fovx, width), height)
+                    FovY = fovy 
+                    FovX = fovx
+                    these_cams.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, 
+                                    image_path=image_path, image_name=image_name, 
+                                    width=width, height=height, iterate_after=splits[split_idx]))
+                random.shuffle(these_cams)
+                print(f"Read {len(these_cams)} cameras for split {split_idx}")
+                cam_infos.extend(these_cams)
     return cam_infos
 
 

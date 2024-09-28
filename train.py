@@ -83,13 +83,14 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
     
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device=dataset.data_device)
-
+    
+    os.makedirs("temp_bin", exist_ok=True)
+    
     if dataset.is_binary:
         DATA_PATH = "/nobackup3/aryan/dataset/binary/f1000/"
         SPLIT = "train"
         data_npy = np.load(DATA_PATH+SPLIT+"/frames.npy", mmap_mode="r")
-    os.makedirs("temp_bin", exist_ok=True)
-
+  
     if dataset.is_graded: # pre-load all npys on disk
         DATA_PATH = "/nobackup3/aryan/dataset/"
         data_npy_025 = np.load(DATA_PATH+"moped_rgb0025/frames.npy", mmap_mode="r")
@@ -97,6 +98,10 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         data_npy_100 = np.load(DATA_PATH+"moped_rgb0100/frames.npy", mmap_mode="r")
         data_npy_200 = np.load(DATA_PATH+"moped_rgb0200/frames.npy", mmap_mode="r")
         data_npy_binary = np.load(DATA_PATH+"binary/f1000/train/frames.npy", mmap_mode="r")
+
+    if dataset.is_pure_graded:
+        DATA_PATH = "/nobackup3/aryan/dataset/"
+        data_npy = np.load(DATA_PATH+"binary/f1000/train/frames.npy", mmap_mode="r")
 
     iter_start = torch.cuda.Event(enable_timing = True)
     iter_end = torch.cuda.Event(enable_timing = True)
@@ -138,10 +143,10 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         if iteration % 1000 == 0:
             gaussians.oneupSHdegree()
 
-        if iteration % 6000 == 0:
+        if iteration % 5000 == 0:
             # And clause to keep the lr same after 20k.
             # After 20k, is the binary dataset training
-            gaussians.update_other_learning_rates(iteration, factor=0.5) 
+            gaussians.update_other_learning_rates(iteration, factor=0.1) 
             # other lrs means apart from position. 
             # Which already has a scheduler
 
@@ -149,16 +154,16 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         # if not viewpoint_stack:
         #     viewpoint_stack = scene.getTrainCameras().copy()
         # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-        if iteration < 6000:
+        if iteration < 8000:
             viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[0], 
                                                     sample_cam_intervals[1])]
-        elif iteration < 12000:
+        elif iteration < 15000:
             viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[1], 
                                                     sample_cam_intervals[2])]
-        elif iteration < 18000:
+        elif iteration < 21000:
             viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[2], 
                                                     sample_cam_intervals[3])]
-        elif iteration < 24000:
+        elif iteration < 26000:
             viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[3], 
                                                     sample_cam_intervals[4])]
         else:
@@ -203,23 +208,41 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
 
         elif dataset.is_graded:
             pred_image = torch.clamp(image,0.,1.)
-            if viewpoint_cam.iterate_after == 20_000:
+            if viewpoint_cam.iterate_after == 24000: # NOTE-Graded: These need to be changed everytime
                 bin_img = np.unpackbits(data_npy_binary[int(viewpoint_cam.image_name)], axis=1)
                 gt_image = torch.from_numpy(bin_img).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "binary")
-            elif viewpoint_cam.iterate_after == 15000:
+            elif viewpoint_cam.iterate_after == 18000:
                 gt_image = torch.from_numpy(data_npy_200[int(viewpoint_cam.image_name)] / 255.).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
-            elif viewpoint_cam.iterate_after == 10000:
+            elif viewpoint_cam.iterate_after == 12000:
                 gt_image = torch.from_numpy(data_npy_100[int(viewpoint_cam.image_name)] / 255.).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
-            elif viewpoint_cam.iterate_after == 5000:
+            elif viewpoint_cam.iterate_after == 6000:
                 gt_image = torch.from_numpy(data_npy_050[int(viewpoint_cam.image_name)] / 255.).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
             elif viewpoint_cam.iterate_after == 0:
                 gt_image = torch.from_numpy(data_npy_025[int(viewpoint_cam.image_name)] / 255.).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
         
+        elif dataset.is_pure_graded:
+            pred_image = torch.clamp(image,0.,1.)
+            if viewpoint_cam.iterate_after == 24000:
+                bin_img = np.unpackbits(data_npy[int(viewpoint_cam.image_name)], axis=1)
+                gt_image = torch.from_numpy(bin_img).float().cuda().permute(2,0,1)
+                loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "binary")
+            else:
+                left_idx, right_idx = viewpoint_cam.image_name.split("_")
+                left_idx, right_idx = int(left_idx), int(right_idx)
+                # print(left_idx, right_idx)
+                this_window = []
+                for majehi in range(left_idx, right_idx):
+                    this_window.append(np.unpackbits(data_npy[majehi], axis=1))
+                avg_frame = np.mean(this_window, axis=0)
+                # normalize avg frame between 0 and 1
+                avg_frame = (1. / (np.amax(avg_frame))) * avg_frame # Gain factor and normalizing to 0-1
+                gt_image = torch.from_numpy(avg_frame).float().cuda().permute(2,0,1)
+                loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
         else:
             gt_image = viewpoint_cam.original_image.cuda()
             pred_image = torch.clamp(image,0.,1.)
@@ -233,9 +256,20 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
             # Progress bar
             ema_loss_for_log = 0.4 * loss.item() + 0.6 * ema_loss_for_log
             # ema_points_for_log = 0.4 * num_points + 0.6 * ema_loss_for_log
+
+
             if iteration % 10 == 0:
                 progress_bar.set_postfix({"Loss": f"{ema_loss_for_log:.{7}f}" , "Points": f"{num_points}"})
                 progress_bar.update(10)
+
+                pred_image = pred_image.cpu().permute(1,2,0).numpy() * 255.
+                pred_image = Image.fromarray(pred_image.astype(np.uint8))
+                pred_image.save(f"temp_bin/itr{iteration}_pred.png")
+
+                gt_image = gt_image.cpu().permute(1,2,0).numpy() * 255.
+                gt_image = Image.fromarray(gt_image.astype(np.uint8))
+                gt_image.save(f"temp_bin/itr{iteration}_gt.png")
+
             if iteration == opt.iterations:
                 progress_bar.close()
 
@@ -245,23 +279,14 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
             # else:
         
             #     training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background))
-            
-            # Save prediction & ground truth
-            if iteration % 10 == 0: # and dataset.is_binary 
-                pred_image = pred_image.cpu().permute(1,2,0).numpy() * 255.
-                pred_image = Image.fromarray(pred_image.astype(np.uint8))
-                pred_image.save(f"temp_bin/itr{iteration}_pred.png")
-
-                gt_image = gt_image.cpu().permute(1,2,0).numpy() * 255.
-                gt_image = Image.fromarray(gt_image.astype(np.uint8))
-                gt_image.save(f"temp_bin/itr{iteration}_gt.png")
+        
 
 
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
-            if (iteration in render_iterations): 
-                rendering(dataset, scene, gaussians, pipe, iteration)
+            # if (iteration in render_iterations): 
+            #     rendering(dataset, scene, gaussians, pipe, iteration)
 
             # Densification
             if iteration < opt.densify_until_iter:

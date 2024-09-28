@@ -63,7 +63,7 @@ def loadCam(args, id, cam_info, resolution_scale):
                          image_name=cam_info.image_name, 
                          uid=id, 
                          data_device=args.data_device)
-    elif args.is_graded:
+    elif args.is_graded or args.is_pure_graded:
         return CameraGraded(colmap_id=cam_info.uid, 
                          R=cam_info.R, 
                          T=cam_info.T, 

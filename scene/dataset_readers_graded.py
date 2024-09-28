@@ -210,10 +210,10 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
 
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png"):
     dirs_to_do = {"moped_rgb0025": 0, 
-                  "moped_rgb0050": 5_000,
-                  "moped_rgb0100": 10_000,
-                  "moped_rgb0200": 15_000,
-                  "binary/f1000/train": 20_000}
+                  "moped_rgb0050": 6000,
+                  "moped_rgb0100": 12000,
+                  "moped_rgb0200": 18000,
+                  "binary/f1000/train": 24000}
     cam_infos = []
     for k, v in dirs_to_do.items():
         with open(os.path.join(path, k, transformsfile)) as json_file:

@@ -193,9 +193,9 @@ class GaussianModel:
             if param_group["name"] == "f_rest":
                 param_group['lr'] = param_group['lr'] * factor
             
-        print("New learning rates:")
-        for param_group in self.optimizer.param_groups:
-            print(param_group["name"], param_group["lr"])
+        # print("New learning rates:")
+        # for param_group in self.optimizer.param_groups:
+        #     print(param_group["name"], param_group["lr"])
             
 
     def construct_list_of_attributes(self):
