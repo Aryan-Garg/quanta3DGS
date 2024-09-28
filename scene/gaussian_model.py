@@ -180,6 +180,24 @@ class GaussianModel:
                 param_group['lr'] = lr
                 return lr
 
+    def update_other_learning_rates(self, iteration, factor=0.5):
+        for param_group in self.optimizer.param_groups:
+            if param_group["name"] == "opacity":
+                param_group['lr'] = param_group['lr'] * factor
+            if param_group["name"] == "scaling":
+                param_group['lr'] = param_group['lr'] * factor
+            if param_group["name"] == "rotation":
+                param_group['lr'] = param_group['lr'] * factor
+            if param_group["name"] == "f_dc":
+                param_group['lr'] = param_group['lr'] * factor
+            if param_group["name"] == "f_rest":
+                param_group['lr'] = param_group['lr'] * factor
+            
+        print("New learning rates:")
+        for param_group in self.optimizer.param_groups:
+            print(param_group["name"], param_group["lr"])
+            
+
     def construct_list_of_attributes(self):
         l = ['x', 'y', 'z', 'nx', 'ny', 'nz']
         # All channels except the 3 DC
