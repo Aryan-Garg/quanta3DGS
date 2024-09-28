@@ -16,6 +16,7 @@ from utils.system_utils import searchForMaxIteration
 # from scene.dataset_readers_raw import sceneLoadTypeCallbacks as rawsceneloader
 from scene.dataset_readers import sceneLoadTypeCallbacks as sceneloader
 from scene.dataset_readers_binary import sceneLoadTypeCallbacks as binarysceneloader
+from scene.dataset_readers_graded import sceneLoadTypeCallbacks as gradedsceneloader
 from scene.gaussian_model import GaussianModel
 # from scene.gm_aryan import GaussianModel
 from arguments import ModelParams
@@ -33,9 +34,10 @@ class Scene:
         self.model_path = args.model_path
         self.loaded_iter = None
         self.gaussians = gaussians
-        print("[+] Is Binary?", args.is_binary)
+        # print("[+] Is Binary?", args.is_binary)
         # self.callback = rawsceneloader if args.is_raw else sceneloader 
         self.callback = binarysceneloader if args.is_binary else sceneloader
+        self.callback = gradedsceneloader if args.is_graded else self.callback
 
 
         if load_iteration:
@@ -56,8 +58,11 @@ class Scene:
                 scene_info = self.callback["Colmap"](args.source_path, args.images, args.eval, "demosaic", args.denoise_method)
             else:
                 scene_info = self.callback["Colmap"](args.source_path, args.images, args.eval)
-        elif os.path.exists(os.path.join(args.source_path, "transforms.json")):
+        elif not args.is_graded and os.path.exists(os.path.join(args.source_path, "transforms.json")):
             print("Found transforms.json file, assuming Blender data set!")
+            scene_info = self.callback["Blender"](args.source_path, args.white_background, args.eval)
+        elif args.is_graded:
+            print("[+] Graded Scene: Assuming Blender dataset.\n Iterations still hard-coded (5k intervals)")
             scene_info = self.callback["Blender"](args.source_path, args.white_background, args.eval)
         else:
             assert False, "> Could not recognize scene type!"
@@ -76,9 +81,11 @@ class Scene:
             with open(os.path.join(self.model_path, "cameras.json"), 'w') as file:
                 json.dump(json_cams, file)
 
-        if shuffle:
+        if not args.is_graded and shuffle:
             random.shuffle(scene_info.train_cameras)  # Multi-res consistent random shuffling
             random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
+        if args.is_graded: # Do not shuffle graded scenes (they are internally shuffled (per fps))
+            random.shuffle(scene_info.test_cameras)
 
         self.cameras_extent = scene_info.nerf_normalization["radius"]
 
