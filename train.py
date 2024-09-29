@@ -232,6 +232,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
                 gt_image = torch.from_numpy(bin_img).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "binary")
             else:
+                print("[+] image path", viewpoint_cam.image_path)
                 avg_frame = np.array(Image.open(viewpoint_cam.image_path).convert("RGB")) / 255.
                 gt_image = torch.from_numpy(avg_frame).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")

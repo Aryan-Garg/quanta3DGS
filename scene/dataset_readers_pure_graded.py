@@ -254,20 +254,20 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 elif split_idx == 1:
                     lookup_dir = "/nobackup3/aryan/dataset/avg_0050fps"
                 elif split_idx == 2:
-                    lookup_dir = "/nobackup3/aryan/dataset/avg_0100fps"
+                    lookup_dir = "/nobackup3/aryan/dataset/avg_00100fps"
                 elif split_idx == 3:
-                    lookup_dir = "/nobackup3/aryan/dataset/avg_0200fps"
+                    lookup_dir = "/nobackup3/aryan/dataset/avg_00200fps"
 
                 for f in os.listdir(lookup_dir):
                     if f.endswith(".npy"):
                         cam_info = np.load(os.path.join(lookup_dir, f), allow_pickle=True).item()
                         image_name = "frame_" + str(f.split("_")[1].split(".")[0]) + ".png"
-                        these_cams.append(CameraInfo(uid=cam_info['idx'], 
+                        these_cams.append(CameraInfo(uid=cam_info['uid'], 
                                                      R=cam_info['R'], 
                                                      T=cam_info['T'], 
                                                      FovY=cam_info['FovY'], 
                                                      FovX=cam_info['FovX'], 
-                                                     image_path=cam_info['image_path'], 
+                                                     image_path=os.path.join(lookup_dir, image_name),
                                                      image_name=image_name, 
                                                      width=cam_info['width'], 
                                                      height=cam_info['height'], 
