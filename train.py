@@ -232,15 +232,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
                 gt_image = torch.from_numpy(bin_img).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "binary")
             else:
-                left_idx, right_idx = viewpoint_cam.image_name.split("_")
-                left_idx, right_idx = int(left_idx), int(right_idx)
-                # print(left_idx, right_idx)
-                this_window = []
-                for majehi in range(left_idx, right_idx):
-                    this_window.append(np.unpackbits(data_npy[majehi], axis=1))
-                avg_frame = np.mean(this_window, axis=0)
-                # normalize avg frame between 0 and 1
-                avg_frame = (1. / (np.amax(avg_frame))) * avg_frame # Gain factor and normalizing to 0-1
+                avg_frame = np.array(Image.open(viewpoint_cam.image_path).convert("RGB")) / 255.
                 gt_image = torch.from_numpy(avg_frame).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
         else:
