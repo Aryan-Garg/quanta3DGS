@@ -7,5 +7,5 @@ export CUDA_VISIBLE_DEVICES=1
 
 
 python train.py -s /nobackup3/aryan/dataset/binary/f1000/train \
- --is_pure_graded --densify_until_iter 7000
+ --is_pure_graded --densify_until_iter 8000
 #  --position_lr_init 0.00008 --opacity_lr 0.01 

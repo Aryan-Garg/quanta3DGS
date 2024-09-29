@@ -154,10 +154,10 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         # if not viewpoint_stack:
         #     viewpoint_stack = scene.getTrainCameras().copy()
         # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-        if iteration < 8000:
+        if iteration < 10000:
             viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[0], 
                                                     sample_cam_intervals[1])]
-        elif iteration < 15000:
+        elif iteration < 16000:
             viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[1], 
                                                     sample_cam_intervals[2])]
         elif iteration < 21000:
@@ -227,12 +227,12 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         
         elif dataset.is_pure_graded:
             pred_image = torch.clamp(image,0.,1.)
-            if viewpoint_cam.iterate_after == 24000:
+            if "bin_" in viewpoint_cam.image_name:
                 bin_img = np.unpackbits(data_npy[int(viewpoint_cam.image_name)], axis=1)
                 gt_image = torch.from_numpy(bin_img).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "binary")
             else:
-                print("[+] image path", viewpoint_cam.image_path)
+                # print("[+] image path", viewpoint_cam.image_path)
                 avg_frame = np.array(Image.open(viewpoint_cam.image_path).convert("RGB")) / 255.
                 gt_image = torch.from_numpy(avg_frame).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
