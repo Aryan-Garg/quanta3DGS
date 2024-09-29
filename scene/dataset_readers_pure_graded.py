@@ -208,6 +208,9 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
     return scene_info
 
 
+# TODO: Directly read in all the pre-processed Camera Info things and pass in img_name
+# Load the img directly in train.py for the loss computation. (No need for left of right)
+# This will bring down training time back to under < ~40 mins
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png"):
     splits = [0, 8000, 15000, 21000, 26000]
     cam_infos = []
@@ -221,7 +224,8 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
         # Ex - Our capture time was 20s, fps was 25, so chunk size = 40000 // 25 = 1600
         for split_idx in range(len(splits)):
             these_cams = []
-            if chunk_sizes[split_idx] == 1: # binary frames. No left_right pairs.
+            this_chunk_size = chunk_sizes[split_idx]
+            if this_chunk_size == 1: # binary frames. No left_right pairs.
                 for idx in range(0, len(frames)):
                     cam_name = str(idx)
                     c2w = np.array(frames[idx]["transform_matrix"])
@@ -245,34 +249,29 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 print(f"Read {len(these_cams)} cameras for split {split_idx}")
                 cam_infos.extend(these_cams)
             else:
-                for idx in range(0, len(frames), chunk_sizes[split_idx]):
-                    # check if idx + chunk_sizes[split_idx] is within bounds and even
-                    if idx + chunk_sizes[split_idx] >= len(frames):
-                        break
-                    if (idx + chunk_sizes[split_idx]) % 2 != 0:
-                        continue
-                    middle_cam_idx = (idx + chunk_sizes[split_idx]) // 2
-                    cam_name = str(middle_cam_idx)
+                if split_idx == 0:
+                    lookup_dir = "/nobackup3/aryan/dataset/avg_0025fps"
+                elif split_idx == 1:
+                    lookup_dir = "/nobackup3/aryan/dataset/avg_0050fps"
+                elif split_idx == 2:
+                    lookup_dir = "/nobackup3/aryan/dataset/avg_0100fps"
+                elif split_idx == 3:
+                    lookup_dir = "/nobackup3/aryan/dataset/avg_0200fps"
 
-                    c2w = np.array(frames[middle_cam_idx]["transform_matrix"])
-                    c2w[:3, 1:3] *= -1
-                    w2c = np.linalg.inv(c2w)
-                    R = np.transpose(w2c[:3,:3])  
-                    T = w2c[:3, 3]
-                    image_path = os.path.join(path, "frames.npy")
-                    left = idx
-                    right = idx + chunk_sizes[split_idx]
-
-                    image_name = f"{left:06d}_{right:06d}"
-                    width, height = 800, 800
-                    # bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
-
-                    fovy = focal2fov(fov2focal(fovx, width), height)
-                    FovY = fovy 
-                    FovX = fovx
-                    these_cams.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, 
-                                    image_path=image_path, image_name=image_name, 
-                                    width=width, height=height, iterate_after=splits[split_idx]))
+                for f in os.listdir(lookup_dir):
+                    if f.endswith(".npy"):
+                        cam_info = np.load(os.path.join(lookup_dir, f), allow_pickle=True).item()
+                        image_name = "frame_" + str(f.split("_")[1].split(".")[0]) + ".png"
+                        these_cams.append(CameraInfo(uid=cam_info['idx'], 
+                                                     R=cam_info['R'], 
+                                                     T=cam_info['T'], 
+                                                     FovY=cam_info['FovY'], 
+                                                     FovX=cam_info['FovX'], 
+                                                     image_path=cam_info['image_path'], 
+                                                     image_name=image_name, 
+                                                     width=cam_info['width'], 
+                                                     height=cam_info['height'], 
+                                                     iterate_after=cam_info['iterate_after']))
                 random.shuffle(these_cams)
                 print(f"Read {len(these_cams)} cameras for split {split_idx}")
                 cam_infos.extend(these_cams)
