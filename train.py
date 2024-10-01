@@ -108,7 +108,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
 
     viewpoint_stack = scene.getTrainCameras().copy()
     sample_cam_intervals = [0]
-    this_iter = 0
+    this_iter = -1
     for i in range(len(viewpoint_stack)):
         if viewpoint_stack[i].iterate_after != this_iter:
             sample_cam_intervals.append(i)
@@ -143,32 +143,44 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         if iteration % 1000 == 0:
             gaussians.oneupSHdegree()
 
-        if iteration % 5000 == 0:
-            # And clause to keep the lr same after 20k.
-            # After 20k, is the binary dataset training
-            gaussians.update_other_learning_rates(iteration, factor=0.1) 
-            # other lrs means apart from position. 
-            # Which already has a scheduler
+        if dataset.is_pure_graded:
+            if iteration == 20000:
+                # And clause to keep the lr same after 20k.
+                # After 20k, is the binary dataset training
+                gaussians.update_other_learning_rates(iteration, factor=0.5) 
+                # other lrs means apart from position. 
+                # Which already has a scheduler
+            elif iteration == 40000:
+                gaussians.update_other_learning_rates(iteration, factor=0.1)
+            elif iteration == 50000:
+                gaussians.update_other_learning_rates(iteration, factor=0.05)
+            elif iteration == 60000:
+                gaussians.update_other_learning_rates(iteration, factor=0.025)
+            elif iteration == 65000:
+                gaussians.update_other_learning_rates(iteration, factor=0.01)
 
         
         # if not viewpoint_stack:
         #     viewpoint_stack = scene.getTrainCameras().copy()
         # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-        if iteration < 10000:
+        if iteration < 20000:
             viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[0], 
                                                     sample_cam_intervals[1])]
-        elif iteration < 16000:
+        elif iteration < 40000:
             viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[1], 
                                                     sample_cam_intervals[2])]
-        elif iteration < 21000:
+        elif iteration < 50000:
             viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[2], 
                                                     sample_cam_intervals[3])]
-        elif iteration < 26000:
+        elif iteration < 60000:
             viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[3], 
                                                     sample_cam_intervals[4])]
-        else:
+        elif iteration < 65000:
             viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[4], 
                                                     sample_cam_intervals[5])]
+        else:
+            viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[5], 
+                                                    sample_cam_intervals[6])]
         
         # print("Viewpoint Cam:", viewpoint_cam.image_name, 
         #       "Iteration:",     iteration, 
@@ -228,7 +240,8 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         elif dataset.is_pure_graded:
             pred_image = torch.clamp(image,0.,1.)
             if "bin_" in viewpoint_cam.image_name:
-                bin_img = np.unpackbits(data_npy[int(viewpoint_cam.image_name)], axis=1)
+                cam_idx = int(viewpoint_cam.image_name.split("_")[1])
+                bin_img = np.unpackbits(data_npy[cam_idx], axis=1)
                 gt_image = torch.from_numpy(bin_img).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "binary")
             else:
@@ -251,9 +264,9 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
             # ema_points_for_log = 0.4 * num_points + 0.6 * ema_loss_for_log
 
 
-            if iteration % 10 == 0:
+            if iteration % 25 == 0:
                 progress_bar.set_postfix({"Loss": f"{ema_loss_for_log:.{7}f}" , "Points": f"{num_points}"})
-                progress_bar.update(10)
+                progress_bar.update(25)
 
                 pred_image = pred_image.cpu().permute(1,2,0).numpy() * 255.
                 pred_image = Image.fromarray(pred_image.astype(np.uint8))
@@ -444,7 +457,12 @@ if __name__ == "__main__":
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[7_000, 30_000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[7_000, 30_000])
+
+    # NOTE-Pure Graded: Save whenever data changes to higher fps
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[20_000, 40_000, 
+                                                                           50_000, 60_000, 
+                                                                           65_000, 70_000])
+    
     parser.add_argument("--render_iterations", nargs="+", type=int, default=[30_000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
@@ -479,11 +497,3 @@ if __name__ == "__main__":
     # All done
     print("\nTraining complete.")
 
-
-#8111b2ec-8 - no grad 
-#a5f55878-d - baseline 
-#b6b3ac4c-7 - 2.5 scaling factor  
-# 4fe64f3c-c - 3 scaling factor   
-
-
-# GIRISH SUGGESTION: render in mosaiced space modify Rasterizer code remove spherical harmonics maybe? (Cause no rgb space)

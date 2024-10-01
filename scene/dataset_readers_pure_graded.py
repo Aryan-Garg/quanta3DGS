@@ -212,14 +212,14 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
 # Load the img directly in train.py for the loss computation. (No need for left of right)
 # This will bring down training time back to under < ~40 mins
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png"):
-    splits = [0, 8000, 15000, 21000, 26000]
+    splits = [0, 20000, 40000, 50000, 60000, 65000]
     cam_infos = []
     with open(os.path.join(path, transformsfile)) as json_file:
         contents = json.load(json_file)
         fovx = contents["angle_x"]
         frames = contents["frames"]
         # len_frames = len(frames) =~ 800,000
-        chunk_sizes = [40000 // 25, 40000 // 50, 40000 // 100, 40000 // 200, 1] 
+        chunk_sizes = [80000 // 25, 40000 // 25, 40000 // 50, 40000 // 100, 40000 // 200, 1] 
         # chunk size = total_frames // capture_time * fps OR total_frames // num_frames in that fps bucket 
         # Ex - Our capture time was 20s, fps was 25, so chunk size = 40000 // 25 = 1600
         for split_idx in range(len(splits)):
@@ -250,12 +250,14 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 cam_infos.extend(these_cams)
             else:
                 if split_idx == 0:
-                    lookup_dir = "/nobackup3/aryan/dataset/avg_0025fps"
+                    lookup_dir = "/nobackup3/aryan/dataset/avg_0012fps"
                 elif split_idx == 1:
-                    lookup_dir = "/nobackup3/aryan/dataset/avg_0050fps"
+                    lookup_dir = "/nobackup3/aryan/dataset/avg_0025fps"
                 elif split_idx == 2:
-                    lookup_dir = "/nobackup3/aryan/dataset/avg_00100fps"
+                    lookup_dir = "/nobackup3/aryan/dataset/avg_0050fps"
                 elif split_idx == 3:
+                    lookup_dir = "/nobackup3/aryan/dataset/avg_00100fps"
+                elif split_idx == 4:
                     lookup_dir = "/nobackup3/aryan/dataset/avg_00200fps"
 
                 for f in os.listdir(lookup_dir):

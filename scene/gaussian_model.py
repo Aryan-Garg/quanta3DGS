@@ -172,6 +172,7 @@ class GaussianModel:
                                                     lr_delay_mult=training_args.position_lr_delay_mult,
                                                     max_steps=training_args.position_lr_max_steps)
 
+    # 3DGS
     def update_learning_rate(self, iteration):
         ''' Learning rate scheduling per step '''
         for param_group in self.optimizer.param_groups:
@@ -180,6 +181,7 @@ class GaussianModel:
                 param_group['lr'] = lr
                 return lr
 
+    # NOTE: Added to decay pruning
     def update_other_learning_rates(self, iteration, factor=0.5):
         for param_group in self.optimizer.param_groups:
             if param_group["name"] == "opacity":
@@ -428,10 +430,10 @@ class GaussianModel:
         self.densify_and_clone(grads, max_grad, extent)
         self.densify_and_split(grads, max_grad, extent)
         # check min opacity
-        prune_mask = (self.get_opacity < min_opacity).squeeze()
+        prune_mask = (self.get_opacity < min_opacity).squeeze() # translucent points
         if max_screen_size:
-            big_points_vs = self.max_radii2D > max_screen_size
-            big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent
+            big_points_vs = self.max_radii2D > max_screen_size # big points in screen space
+            big_points_ws = self.get_scaling.max(dim=1).values > 0.1 * extent # big points in world space
             prune_mask = torch.logical_or(torch.logical_or(prune_mask, big_points_vs), big_points_ws)
         self.prune_points(prune_mask)
 
