@@ -22,6 +22,7 @@ from pathlib import Path
 from plyfile import PlyData, PlyElement
 from utils.sh_utils import SH2RGB
 from scene.gaussian_model import BasicPointCloud
+from tqdm import tqdm
 
 class CameraInfo(NamedTuple):
     uid: int
@@ -216,12 +217,40 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
     with open(os.path.join(path, transformsfile)) as json_file:
         contents = json.load(json_file)
         fovx = contents["angle_x"]
-
         frames = contents["frames"]
+        if os.path.exists(os.path.join(os.path.join(path, "frames.npy"))):
+            frames_npy = np.load(os.path.join(path, "frames.npy"))
+
+        pbar = tqdm(total=len(frames))
         for idx, frame in enumerate(frames):
            
             zfilled_idx = str(idx).zfill(6)
-            cam_name = os.path.join(path, "frames") + f"/frame_{zfilled_idx}{extension}"
+            if os.path.exists(os.path.join(path, "frames") + f"/frame_{zfilled_idx}{extension}"):
+                cam_name = os.path.join(path, "frames") + f"/frame_{zfilled_idx}{extension}"
+                image_path = os.path.join(path, cam_name)
+                image_name = Path(cam_name).stem
+                if len(os.listdir(os.path.join(path, "frames"))) <= 1000: # Don't load all images at once
+                    image = Image.open(image_path)
+                    im_data = np.array(image.convert("RGBA"))
+                    bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
+                    norm_data = im_data / 255.0
+                    arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
+                    image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
+                    height, width = image.size[1], image.size[0] 
+                    fovy = focal2fov(fov2focal(fovx, width), height)
+                else:
+                    pbar.set_description(f"{idx}/{len(frames)}")
+                    pbar.update(1)
+                    image = None # Lazy loading
+                    height, width = 800, 800
+                    fovy = focal2fov(fov2focal(fovx, width), height)
+                    # NOTE: Hardcoded to default dataset resolution (QRF) 
+            elif os.path.exists(os.path.join(path, "frames.npy")):
+                cam_name = idx
+                image_path = os.path.join(path, "frames.npy")
+                image_name = cam_name
+                image = Image.fromarray(frames_npy[idx])
+            # cam_name = os.path.join(path, "frames") + f"/frame_{zfilled_idx}{extension}"
             # cam_name = str(idx)
 
             # NeRF 'transform_matrix' is a camera-to-world transform
@@ -234,24 +263,11 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
             R = np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
 
-            image_path = os.path.join(path, cam_name)
-            image_name = Path(cam_name).stem
-            image = Image.open(image_path)
-
-            im_data = np.array(image.convert("RGBA"))
-
-            bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
-
-            norm_data = im_data / 255.0
-            arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
-            image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
-
-            fovy = focal2fov(fov2focal(fovx, image.size[0]), image.size[1])
             FovY = fovy 
             FovX = fovx
-
+       
             cam_infos.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, image=image,
-                            image_path=image_path, image_name=image_name, width=image.size[0], height=image.size[1]))
+                        image_path=image_path, image_name=image_name, width=width, height=height))
             
     return cam_infos
 

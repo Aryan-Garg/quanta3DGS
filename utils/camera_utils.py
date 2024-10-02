@@ -75,9 +75,11 @@ def loadCam(args, id, cam_info, resolution_scale):
                          uid=id, 
                          data_device=args.data_device)
     else:
-        resized_image_rgb = PILtoTorch(cam_info.image, resolution)
-        gt_image = resized_image_rgb[:3, ...]
-
+        if cam_info.image is None:
+            gt_image = None
+        else:
+            resized_image_rgb = PILtoTorch(cam_info.image, resolution)
+            gt_image = resized_image_rgb[:3, ...]
         return Camera(colmap_id=cam_info.uid, R=cam_info.R, T=cam_info.T, 
                   FoVx=cam_info.FovX, FoVy=cam_info.FovY, 
                   image=gt_image, image_name=cam_info.image_name, uid=id, data_device=args.data_device)

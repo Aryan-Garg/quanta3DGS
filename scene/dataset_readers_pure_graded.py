@@ -226,9 +226,9 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
             these_cams = []
             this_chunk_size = chunk_sizes[split_idx]
             if this_chunk_size == 1: # binary frames. No left_right pairs.
-                for idx in range(0, len(frames)):
+                for idx, frame in enumerate(frames):
                     cam_name = str(idx)
-                    c2w = np.array(frames[idx]["transform_matrix"])
+                    c2w = np.array(frame["transform_matrix"])
                     c2w[:3, 1:3] *= -1
                     w2c = np.linalg.inv(c2w)
                     R = np.transpose(w2c[:3,:3])  

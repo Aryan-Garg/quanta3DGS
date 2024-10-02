@@ -84,7 +84,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
     bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
     background = torch.tensor(bg_color, dtype=torch.float32, device=dataset.data_device)
     
-    os.makedirs("temp_bin", exist_ok=True)
+    os.makedirs("temp_gt", exist_ok=True)
     
     if dataset.is_binary:
         DATA_PATH = "/nobackup3/aryan/dataset/binary/f1000/"
@@ -101,20 +101,21 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
 
     if dataset.is_pure_graded:
         DATA_PATH = "/nobackup3/aryan/dataset/"
-        data_npy = np.load(DATA_PATH+"binary/f1000/train/frames.npy", mmap_mode="r")
+        data_npy_pure_bin = np.load(DATA_PATH+"binary/f1000/train/frames.npy", mmap_mode="r")
 
     iter_start = torch.cuda.Event(enable_timing = True)
     iter_end = torch.cuda.Event(enable_timing = True)
 
     viewpoint_stack = scene.getTrainCameras().copy()
-    sample_cam_intervals = [0]
-    this_iter = -1
-    for i in range(len(viewpoint_stack)):
-        if viewpoint_stack[i].iterate_after != this_iter:
-            sample_cam_intervals.append(i)
-            this_iter = viewpoint_stack[i].iterate_after
-    sample_cam_intervals.append(len(viewpoint_stack)-1)
-    print("\n[+] Sample Cam Intervals:", sample_cam_intervals)    
+    if dataset.is_pure_graded:
+        sample_cam_intervals = [0]
+        this_iter = -1
+        for i in range(len(viewpoint_stack)):
+            if viewpoint_stack[i].iterate_after != this_iter:
+                sample_cam_intervals.append(i)
+                this_iter = viewpoint_stack[i].iterate_after
+        sample_cam_intervals.append(len(viewpoint_stack)-1)
+        print("\n[+] Sample Cam Intervals:", sample_cam_intervals)    
 
     ema_loss_for_log = 0.0
     progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
@@ -150,37 +151,43 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
                 gaussians.update_other_learning_rates(iteration, factor=0.5) 
                 # other lrs means apart from position. 
                 # Which already has a scheduler
-            elif iteration == 40000:
+            elif iteration == 35000:
                 gaussians.update_other_learning_rates(iteration, factor=0.1)
-            elif iteration == 50000:
+            elif iteration == 45000:
                 gaussians.update_other_learning_rates(iteration, factor=0.05)
-            elif iteration == 60000:
+            elif iteration == 50000:
                 gaussians.update_other_learning_rates(iteration, factor=0.025)
-            elif iteration == 65000:
+            elif iteration == 52500:
                 gaussians.update_other_learning_rates(iteration, factor=0.01)
 
         
         # if not viewpoint_stack:
         #     viewpoint_stack = scene.getTrainCameras().copy()
-        # viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
-        if iteration < 20000:
-            viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[0], 
-                                                    sample_cam_intervals[1])]
-        elif iteration < 40000:
-            viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[1], 
-                                                    sample_cam_intervals[2])]
-        elif iteration < 50000:
-            viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[2], 
-                                                    sample_cam_intervals[3])]
-        elif iteration < 60000:
-            viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[3], 
-                                                    sample_cam_intervals[4])]
-        elif iteration < 65000:
-            viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[4], 
-                                                    sample_cam_intervals[5])]
+
+        # Getting the camera for this iteration
+        if dataset.is_pure_graded:
+            if iteration < 20000:
+                viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[0], 
+                                                        sample_cam_intervals[1])]
+            elif iteration < 35000:
+                viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[1], 
+                                                        sample_cam_intervals[2])]
+            elif iteration < 45000:
+                viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[2], 
+                                                        sample_cam_intervals[3])]
+            elif iteration < 50000:
+                viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[3], 
+                                                        sample_cam_intervals[4])]
+            elif iteration < 52500:
+                viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[4], 
+                                                        sample_cam_intervals[5])]
+            else: # iteration < 53750
+                viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[5], 
+                                                        sample_cam_intervals[6])]
         else:
-            viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[5], 
-                                                    sample_cam_intervals[6])]
+            if not viewpoint_stack:
+                viewpoint_stack = scene.getTrainCameras().copy()
+            viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
         
         # print("Viewpoint Cam:", viewpoint_cam.image_name, 
         #       "Iteration:",     iteration, 
@@ -240,8 +247,8 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         elif dataset.is_pure_graded:
             pred_image = torch.clamp(image,0.,1.)
             if "bin_" in viewpoint_cam.image_name:
-                cam_idx = int(viewpoint_cam.image_name.split("_")[1])
-                bin_img = np.unpackbits(data_npy[cam_idx], axis=1)
+                cam_idx = int(viewpoint_cam.uid)
+                bin_img = np.unpackbits(data_npy_pure_bin[cam_idx], axis=1)
                 gt_image = torch.from_numpy(bin_img).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "binary")
             else:
@@ -250,7 +257,11 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
                 gt_image = torch.from_numpy(avg_frame).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
         else:
-            gt_image = viewpoint_cam.original_image.cuda()
+            if viewpoint_cam.original_image is None:
+                gt_image = Image.open(viewpoint_cam.image_path).convert("RGB")
+                gt_image = torch.from_numpy(np.array(gt_image) / 255.).float().cuda()
+            else:
+                gt_image = viewpoint_cam.original_image.cuda()
             pred_image = torch.clamp(image,0.,1.)
             loss = loss_fn(pred_image,gt_image,opt.lambda_dssim,dataset.loss_mode)
         loss.backward()
@@ -268,13 +279,14 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
                 progress_bar.set_postfix({"Loss": f"{ema_loss_for_log:.{7}f}" , "Points": f"{num_points}"})
                 progress_bar.update(25)
 
+            if iteration % 200 == 0:
                 pred_image = pred_image.cpu().permute(1,2,0).numpy() * 255.
                 pred_image = Image.fromarray(pred_image.astype(np.uint8))
-                pred_image.save(f"temp_bin/itr{iteration}_pred.png")
+                pred_image.save(f"temp_gt/itr{iteration}_pred.png")
 
                 gt_image = gt_image.cpu().permute(1,2,0).numpy() * 255.
                 gt_image = Image.fromarray(gt_image.astype(np.uint8))
-                gt_image.save(f"temp_bin/itr{iteration}_gt.png")
+                gt_image.save(f"temp_gt/itr{iteration}_gt.png")
 
             if iteration == opt.iterations:
                 progress_bar.close()
@@ -459,9 +471,10 @@ if __name__ == "__main__":
     parser.add_argument("--test_iterations", nargs="+", type=int, default=[7_000, 30_000])
 
     # NOTE-Pure Graded: Save whenever data changes to higher fps
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[20_000, 40_000, 
-                                                                           50_000, 60_000, 
-                                                                           65_000, 70_000])
+    # parser.add_argument("--save_iterations", nargs="+", type=int, default=[20_000, 40_000, 
+    #                                                                        50_000, 60_000, 
+    #                                                                        65_000, 70_000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[10_000, 30_000, 50_000])
     
     parser.add_argument("--render_iterations", nargs="+", type=int, default=[30_000])
     parser.add_argument("--quiet", action="store_true")
