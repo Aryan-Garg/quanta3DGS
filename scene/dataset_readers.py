@@ -220,16 +220,22 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
         frames = contents["frames"]
         if os.path.exists(os.path.join(os.path.join(path, "frames.npy"))):
             frames_npy = np.load(os.path.join(path, "frames.npy"))
-
-        pbar = tqdm(total=len(frames))
+        
+        # Sample 1000 ids from 0 ... len(frames)
+        if len(frames) > 1000:
+            idxs = np.random.choice(len(frames), 1000, replace=False)
+        else:
+            idxs = range(len(frames))
+        pbar = tqdm(total=len(idxs))
         for idx, frame in enumerate(frames):
-           
+            if idx not in idxs:
+                continue
             zfilled_idx = str(idx).zfill(6)
             if os.path.exists(os.path.join(path, "frames") + f"/frame_{zfilled_idx}{extension}"):
                 cam_name = os.path.join(path, "frames") + f"/frame_{zfilled_idx}{extension}"
                 image_path = os.path.join(path, cam_name)
                 image_name = Path(cam_name).stem
-                if len(os.listdir(os.path.join(path, "frames"))) <= 1000: # Don't load all images at once
+                if len(idxs) <= 1000: # Don't load all images at once
                     image = Image.open(image_path)
                     im_data = np.array(image.convert("RGBA"))
                     bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
@@ -238,6 +244,8 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
                     height, width = image.size[1], image.size[0] 
                     fovy = focal2fov(fov2focal(fovx, width), height)
+                    # pbar.set_description(f"{idx}/{len(idxs)}")
+                    pbar.update(1)
                 else:
                     pbar.set_description(f"{idx}/{len(frames)}")
                     pbar.update(1)
@@ -249,7 +257,10 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 cam_name = idx
                 image_path = os.path.join(path, "frames.npy")
                 image_name = cam_name
-                image = Image.fromarray(frames_npy[idx])
+                image = Image.fromarray(frames_npy[idx]).convert("RGB")
+                height, width = image.size[1], image.size[0]
+                fovy = focal2fov(fov2focal(fovx, width), height)
+
             # cam_name = os.path.join(path, "frames") + f"/frame_{zfilled_idx}{extension}"
             # cam_name = str(idx)
 

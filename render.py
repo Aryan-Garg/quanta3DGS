@@ -22,38 +22,67 @@ from utils.general_utils import safe_state
 from argparse import ArgumentParser
 from arguments import ModelParams, PipelineParams, get_combined_args
 from gaussian_renderer import GaussianModel
-# import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt 
 from internal.image import color_correct
 from internal.raw_utils import match_images_affine
 from scene.colmap_loader import read_extrinsics_binary, read_intrinsics_binary, qvec2rotmat
 from utils.graphics_utils import getWorld2View2, focal2fov, getIntrinsicMatrix
 import numpy as np
 from PIL import Image
-
+import lpipsPyTorch
 import time
+from SSIM_PIL import compare_ssim
+
+lpips = lpipsPyTorch.lpips
+def compute_psnr(gt, pred):
+    gt = torch.tensor(gt).unsqueeze(0).cuda()
+    pred = torch.tensor(pred).unsqueeze(0).cuda()
+    mse = torch.mean((gt - pred) ** 2)
+    psnr = 20 * torch.log10(1.0 / torch.sqrt(mse))
+    return psnr.item()
+
+
+def compute_ssim(a, b): # These are numpy arrays
+    a = Image.fromarray((a * 255).astype(np.uint8))
+    b = Image.fromarray((b * 255).astype(np.uint8))
+    return compare_ssim(a, b)
+
+
+def compute_lpips(gt, pred):
+    lpips_val = lpips(torch.tensor(gt).permute(2,0,1).unsqueeze(0).cuda(), 
+                      torch.tensor(pred).permute(2,0,1).unsqueeze(0).cuda())
+    return lpips_val.item()
+
 
 def render_set(model_path, name, iteration, views, gaussians, pipeline, background):
-    render_path = os.path.join(model_path, name, "2ours_{}".format(iteration), "renders")
-    gts_raw_path = os.path.join(model_path, name, "2ours_{}".format(iteration), "gt_postprocess_raw")
-    gts_path = os.path.join(model_path, name, "2ours_{}".format(iteration), "gt")
+    render_path = os.path.join(model_path, name, "TogTest_{}".format(iteration), "renders")
+    # gts_raw_path = os.path.join(model_path, name, "2ours_{}".format(iteration), "gt_postprocess_raw")
+    # gts_path = os.path.join(model_path, name, "TogTest_{}".format(iteration), "gt")
 
     makedirs(render_path, exist_ok=True)
-    makedirs(gts_path, exist_ok=True)
-    makedirs(gts_raw_path, exist_ok=True)
-    # print(views)
-
+    # makedirs(gts_path, exist_ok=True)
+    # makedirs(gts_raw_path, exist_ok=True)
+    print(views)
+    with open(os.path.join(model_path, name, "TogTest_{}".format(iteration), "metrics.txt"), "w") as f:
+        f.write(f"PSNR, SSIM, LPIPS for {model_path}/{name}\n")
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         rendering = render(view, gaussians, pipeline, background)["render"]
+        rendering = rendering.clamp(0, 1)
         rendering = torch.permute(rendering,(1,2,0))
         rendering = rendering.detach().cpu().numpy()
         plt.imsave(os.path.join(render_path, '{}'.format(view.image_name) + ".png"),(255*rendering).astype(np.uint8))
         
         gt_image  = view.original_image[0:3, :, :]
-    
         gt_image = torch.permute(gt_image,(1,2,0))
         gt_image = gt_image.detach().cpu().numpy()
 
-        plt.imsave(os.path.join(gts_path, '{}'.format(view.image_name) + ".png"),(255*gt_image).astype(np.uint8))
+        # plt.imsave(os.path.join(gts_path, '{}'.format(view.image_name) + ".png"),(255*gt_image).astype(np.uint8))
+        # Compute psnr, ssim and lpips and write to file per image_name
+        psnr = compute_psnr(gt_image, rendering)
+        ssim = compute_ssim(gt_image, rendering)
+        lpips = compute_lpips(gt_image, rendering)
+        with open(os.path.join(model_path, name, "TogTest_{}".format(iteration), "metrics.txt"), "a") as f:
+            f.write(f"{view.image_name} PSNR: {psnr} SSIM: {ssim} LPIPS: {lpips}\n")
 
 def render_set_raw(model_path, scene_path, name, iteration, views, gaussians, pipeline, background, is_affine_cc, is_cc):
     render_path_affine = os.path.join(model_path, name, "ours_{}".format(iteration), "renders_affine")
@@ -242,16 +271,16 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
         is_affine_cc = dataset.affine_color_fit
         if not skip_train:
             if dataset.is_raw:
-                render_set_raw(dataset.model_path,dataset.source_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background, is_affine_cc, is_cc)
+                render_set_raw(dataset.model_path, dataset.source_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background, is_affine_cc, is_cc)
                 # render_set_raw(dataset.model_path, dataset.source_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background, is_affine_cc, is_cc)
             else:
                 render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background)
 
-        # if not skip_test:
-        #     if dataset.is_raw:
-        #         render_set_raw(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,is_affine_cc, is_cc)
-        #     else:
-        #         render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background)
+        if not skip_test:
+            if dataset.is_raw:
+                render_set_raw(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background,is_affine_cc, is_cc)
+            else:
+                render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background)
 
 
 if __name__ == "__main__":
@@ -259,8 +288,8 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Testing script parameters")
     model = ModelParams(parser, sentinel=True)
     pipeline = PipelineParams(parser)
-    parser.add_argument("--iteration", default=30_000, type=int)
-    parser.add_argument("--skip_train", action="store_true")
+    parser.add_argument("--iteration", default=50_000, type=int)
+    parser.add_argument("--skip_train", action="store_true", default=True)
     parser.add_argument("--skip_test", action="store_true")
     parser.add_argument("--quiet", action="store_true")
 
@@ -270,4 +299,4 @@ if __name__ == "__main__":
     # Initialize system state (RNG)
     safe_state(args.quiet)
 
-    render_sets(model.extract(args), 30000, pipeline.extract(args), args.skip_train, args.skip_test)
+    render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)

@@ -12,7 +12,7 @@ from plyfile import PlyData, PlyElement
 from utils.sh_utils import SH2RGB
 from scene.gaussian_model import BasicPointCloud
 import random
-
+from tqdm import tqdm
 
 class CameraInfo(NamedTuple):
     uid: int
@@ -26,7 +26,6 @@ class CameraInfo(NamedTuple):
     width: int
     height: int
     iterate_after: int = 0
-
 
 class SceneInfo(NamedTuple):
     point_cloud: BasicPointCloud
@@ -212,7 +211,7 @@ def readColmapSceneInfo(path, images, eval, llffhold=8):
 # Load the img directly in train.py for the loss computation. (No need for left of right)
 # This will bring down training time back to under < ~40 mins
 def readCamerasFromTransforms(path, transformsfile, white_background, extension=".png"):
-    splits = [0, 20000, 40000, 50000, 60000, 65000]
+    splits = [0, 20000, 35000, 45000, 50000, 52500]
     cam_infos = []
     with open(os.path.join(path, transformsfile)) as json_file:
         contents = json.load(json_file)
@@ -280,15 +279,71 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
     return cam_infos
 
 
+def readCamerasFromTransforms_moped2(path, transformsfile, white_background, extension=".png"):
+    splits = [0, 20000, 35000, 45000, 50000, 52500]
+    dirs_to_do = {"binavg0025fps": 0, 
+                  "binavg0050fps": 20000,
+                  "binavg0100fps": 35000,
+                  "binavg0200fps": 45000,
+                  "binavg1000fps": 50000}
+    cam_infos = []
+    for k, v in dirs_to_do.items():
+        with open(os.path.join(path, k, "f1000", "train", transformsfile)) as json_file:
+            contents = json.load(json_file)
+            fovx = contents["angle_x"]
+            frames = contents["frames"]
+        
+            these_cams = []
+            pbar = tqdm(total=len(frames))
+            for idx, frame in enumerate(frames):
+                zfilled_idx = str(idx).zfill(6)
+                cam_name = os.path.join(path, k, "f1000", "train", "frames") + f"/frame_{zfilled_idx}{extension}"
+                image_path = os.path.join(path, cam_name)
+                image_name = Path(cam_name).stem
+                # image = Image.open(image_path)
+                # im_data = np.array(image.convert("RGBA"))
+                # bg = np.array([1,1,1]) if white_background else np.array([0, 0, 0])
+                # norm_data = im_data / 255.0
+                # arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
+                # image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
+                height, width = 800, 800
+                fovy = focal2fov(fov2focal(fovx, width), height)
+                # pbar.set_description(f"{idx}/{len(idxs)}")
+                pbar.update(1)
+
+                c2w = np.array(frame["transform_matrix"])
+                # change from OpenGL/Blender camera axes (Y up, Z back) to COLMAP (Y down, Z forward)
+                c2w[:3, 1:3] *= -1
+
+                # get the world-to-camera transform and set R, T
+                w2c = np.linalg.inv(c2w)
+                R = np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
+                T = w2c[:3, 3]
+
+                FovY = fovy 
+                FovX = fovx
+                these_cams.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX,
+                                image_path=image_path, image_name=image_name,
+                                width=width, height=height, iterate_after=v))
+                
+            random.shuffle(these_cams)
+            print(f"[+] Read {len(these_cams)} cameras for {k}")
+            cam_infos.extend(these_cams)
+    return cam_infos
+
+
+
 def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
     print("Reading Training Transforms")
-    train_cam_infos = readCamerasFromTransforms(path, "transforms.json", white_background, extension)
+    # train_cam_infos = readCamerasFromTransforms(path, "transforms.json", white_background, extension)
+    train_cam_infos = readCamerasFromTransforms_moped2(path, "transforms.json", white_background, extension)
     nerf_normalization = getNerfppNorm(train_cam_infos)  
     
     test_cam_infos = []
     if eval:
         print("Reading Test Transforms")
-        test_cam_infos = readCamerasFromTransforms(path, "transforms.json", white_background, extension)
+        # test_cam_infos = readCamerasFromTransforms(path, "transforms.json", white_background, extension)
+        test_cam_infos = readCamerasFromTransforms_moped2(path, "transforms.json", white_background, extension)
     
     # if not eval:
     #     train_cam_infos.extend(test_cam_infos)

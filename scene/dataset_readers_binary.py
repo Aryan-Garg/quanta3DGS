@@ -12,6 +12,7 @@ from plyfile import PlyData, PlyElement
 from utils.sh_utils import SH2RGB
 from scene.gaussian_model import BasicPointCloud
 import random
+from tqdm import tqdm
 
 
 class CameraInfo(NamedTuple):
@@ -217,8 +218,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
         frames = contents["frames"]
 
-        # TODO: Start reading bin frames from npy here
-        for idx, frame in enumerate(frames):
+        for idx, frame in enumerate(tqdm(frames)):
            
             # zfilled_idx = str(idx).zfill(6)
             # cam_name = os.path.join(path, "frames") + f"/frame_{zfilled_idx}{extension}"
@@ -253,6 +253,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
     # NOTE: Added: Shuffling the cameras to make sure the scene is covered 
     # cams >> iterations
     random.shuffle(cam_infos)
+    print("[+] Loaded ", len(cam_infos), " cameras from ", transformsfile)
 
     return cam_infos
 

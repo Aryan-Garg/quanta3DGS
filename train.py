@@ -77,7 +77,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
     if checkpoint:
         # (model_params, first_iter) = torch.load(checkpoint)
         gaussians.load_ply(checkpoint)
-        first_iter = 7000
+        first_iter = 50000
         print(f"Loaded checkpoint {checkpoint} at iteration {first_iter}")
 
     
@@ -92,7 +92,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         data_npy = np.load(DATA_PATH+SPLIT+"/frames.npy", mmap_mode="r")
   
     if dataset.is_graded: # pre-load all npys on disk
-        DATA_PATH = "/nobackup3/aryan/dataset/"
+        DATA_PATH = "/nobackup3/aryan/dataset_moped2/"
         data_npy_025 = np.load(DATA_PATH+"moped_rgb0025/frames.npy", mmap_mode="r")
         data_npy_050 = np.load(DATA_PATH+"moped_rgb0050/frames.npy", mmap_mode="r")
         data_npy_100 = np.load(DATA_PATH+"moped_rgb0100/frames.npy", mmap_mode="r")
@@ -100,8 +100,9 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         data_npy_binary = np.load(DATA_PATH+"binary/f1000/train/frames.npy", mmap_mode="r")
 
     if dataset.is_pure_graded:
-        DATA_PATH = "/nobackup3/aryan/dataset/"
-        data_npy_pure_bin = np.load(DATA_PATH+"binary/f1000/train/frames.npy", mmap_mode="r")
+        DATA_PATH = "/nobackup3/aryan/dataset_moped2/"
+        # data_npy_pure_bin = np.load(DATA_PATH+"binary/f1000/train/frames.npy", mmap_mode="r")
+        data_npy_pure_bin = None
 
     iter_start = torch.cuda.Event(enable_timing = True)
     iter_end = torch.cuda.Event(enable_timing = True)
@@ -109,7 +110,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
     viewpoint_stack = scene.getTrainCameras().copy()
     if dataset.is_pure_graded:
         sample_cam_intervals = [0]
-        this_iter = -1
+        this_iter = 0
         for i in range(len(viewpoint_stack)):
             if viewpoint_stack[i].iterate_after != this_iter:
                 sample_cam_intervals.append(i)
@@ -156,7 +157,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
             elif iteration == 45000:
                 gaussians.update_other_learning_rates(iteration, factor=0.05)
             elif iteration == 50000:
-                gaussians.update_other_learning_rates(iteration, factor=0.025)
+                gaussians.update_other_learning_rates(iteration, factor=0.02)
             elif iteration == 52500:
                 gaussians.update_other_learning_rates(iteration, factor=0.01)
 
@@ -166,19 +167,19 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
 
         # Getting the camera for this iteration
         if dataset.is_pure_graded:
-            if iteration < 20000:
+            if iteration < 20000: # 25fps till here
                 viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[0], 
                                                         sample_cam_intervals[1])]
-            elif iteration < 35000:
+            elif iteration < 35000: # 50fps till here
                 viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[1], 
                                                         sample_cam_intervals[2])]
-            elif iteration < 45000:
+            elif iteration < 45000: # 100fps till here
                 viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[2], 
                                                         sample_cam_intervals[3])]
-            elif iteration < 50000:
+            elif iteration < 50000: # 200fps till here
                 viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[3], 
                                                         sample_cam_intervals[4])]
-            elif iteration < 52500:
+            elif iteration <= 52500: 
                 viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[4], 
                                                         sample_cam_intervals[5])]
             else: # iteration < 53750
@@ -203,7 +204,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
        
         if iteration % 10 == 0:
-                num_points = gaussians.get_xyz.shape[0]
+            num_points = gaussians.get_xyz.shape[0]
 
         if dataset.is_raw:
             gt_image_raw = viewpoint_cam.original_image_raw.cuda()
