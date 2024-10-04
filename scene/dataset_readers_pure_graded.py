@@ -225,8 +225,10 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
             these_cams = []
             this_chunk_size = chunk_sizes[split_idx]
             if this_chunk_size == 1: # binary frames. No left_right pairs.
-                for idx, frame in enumerate(frames):
-                    cam_name = str(idx)
+                pbar = tqdm(total=len(frames))
+                for idx_bin, frame in enumerate(frames):
+                    cam_name = str(idx_bin)
+                    pbar.set_description(f"Reading {idx_bin}/{len(frames)}")
                     c2w = np.array(frame["transform_matrix"])
                     c2w[:3, 1:3] *= -1
                     w2c = np.linalg.inv(c2w)
@@ -241,7 +243,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                     fovy = focal2fov(fov2focal(fovx, width), height)
                     FovY = fovy 
                     FovX = fovx
-                    these_cams.append(CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX, 
+                    these_cams.append(CameraInfo(uid=idx_bin, R=R, T=T, FovY=FovY, FovX=FovX, 
                                     image_path=image_path, image_name=image_name, 
                                     width=width, height=height, iterate_after=splits[split_idx]))
                 random.shuffle(these_cams)
@@ -276,6 +278,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
                 random.shuffle(these_cams)
                 print(f"Read {len(these_cams)} cameras for split {split_idx}")
                 cam_infos.extend(these_cams)
+    print("Cam infos len:", len(cam_infos))
     return cam_infos
 
 
@@ -336,14 +339,14 @@ def readCamerasFromTransforms_moped2(path, transformsfile, white_background, ext
 def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
     print("Reading Training Transforms")
     # train_cam_infos = readCamerasFromTransforms(path, "transforms.json", white_background, extension)
-    train_cam_infos = readCamerasFromTransforms_moped2(path, "transforms.json", white_background, extension)
+    train_cam_infos = readCamerasFromTransforms(path, "transforms.json", white_background, extension)
     nerf_normalization = getNerfppNorm(train_cam_infos)  
     
     test_cam_infos = []
     if eval:
         print("Reading Test Transforms")
         # test_cam_infos = readCamerasFromTransforms(path, "transforms.json", white_background, extension)
-        test_cam_infos = readCamerasFromTransforms_moped2(path, "transforms.json", white_background, extension)
+        test_cam_infos = readCamerasFromTransforms(path, "transforms.json", white_background, extension)
     
     # if not eval:
     #     train_cam_infos.extend(test_cam_infos)

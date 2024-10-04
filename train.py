@@ -100,9 +100,9 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         data_npy_binary = np.load(DATA_PATH+"binary/f1000/train/frames.npy", mmap_mode="r")
 
     if dataset.is_pure_graded:
-        DATA_PATH = "/nobackup3/aryan/dataset_moped2/"
-        # data_npy_pure_bin = np.load(DATA_PATH+"binary/f1000/train/frames.npy", mmap_mode="r")
-        data_npy_pure_bin = None
+        DATA_PATH = "/nobackup3/aryan/dataset/"
+        data_npy_pure_bin = np.load(DATA_PATH+"binary/f1000/train/frames.npy", mmap_mode="r")
+        # data_npy_pure_bin = None
 
     iter_start = torch.cuda.Event(enable_timing = True)
     iter_end = torch.cuda.Event(enable_timing = True)
@@ -110,7 +110,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
     viewpoint_stack = scene.getTrainCameras().copy()
     if dataset.is_pure_graded:
         sample_cam_intervals = [0]
-        this_iter = 0
+        this_iter = -1 # NOTE - Change this to 0 when using moped2's avg frames
         for i in range(len(viewpoint_stack)):
             if viewpoint_stack[i].iterate_after != this_iter:
                 sample_cam_intervals.append(i)
@@ -182,7 +182,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
             elif iteration <= 52500: 
                 viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[4], 
                                                         sample_cam_intervals[5])]
-            else: # iteration < 53750
+            else: # iteration > 52500
                 viewpoint_cam = viewpoint_stack[randint(sample_cam_intervals[5], 
                                                         sample_cam_intervals[6])]
         else:
@@ -210,9 +210,8 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
             gt_image_raw = viewpoint_cam.original_image_raw.cuda()
             pred_image_raw = torch.clamp(image, 0., 1.)
             loss = loss_fn(pred_image_raw,gt_image_raw,opt.lambda_dssim,dataset.loss_mode)
+        
         elif dataset.is_binary: 
-            # NOTE: Read bin-image, never elsewhere     >>> DONE
-            # NOTE: Add dataset.is_binary flag          >>> DONE
             bin_img = np.unpackbits(data_npy[int(viewpoint_cam.image_name)], axis=1)
             # DOn't need this: 
             # .convert("RGBA") / 255.
@@ -248,7 +247,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
         elif dataset.is_pure_graded:
             pred_image = torch.clamp(image,0.,1.)
             if "bin_" in viewpoint_cam.image_name:
-                cam_idx = int(viewpoint_cam.uid)
+                cam_idx = int(viewpoint_cam.image_name.split("_")[-1])
                 bin_img = np.unpackbits(data_npy_pure_bin[cam_idx], axis=1)
                 gt_image = torch.from_numpy(bin_img).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "binary")
@@ -257,6 +256,7 @@ def training(dataset, opt, pipe, render_iterations, testing_iterations, saving_i
                 avg_frame = np.array(Image.open(viewpoint_cam.image_path).convert("RGB")) / 255.
                 gt_image = torch.from_numpy(avg_frame).float().cuda().permute(2,0,1)
                 loss = loss_fn(pred_image, gt_image, opt.lambda_dssim, "LDR")
+        
         else:
             if viewpoint_cam.original_image is None:
                 gt_image = Image.open(viewpoint_cam.image_path).convert("RGB")

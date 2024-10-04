@@ -62,7 +62,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     makedirs(render_path, exist_ok=True)
     # makedirs(gts_path, exist_ok=True)
     # makedirs(gts_raw_path, exist_ok=True)
-    print(views)
+    # print(views)
     with open(os.path.join(model_path, name, "TogTest_{}".format(iteration), "metrics.txt"), "w") as f:
         f.write(f"PSNR, SSIM, LPIPS for {model_path}/{name}\n")
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
@@ -72,17 +72,18 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         rendering = rendering.detach().cpu().numpy()
         plt.imsave(os.path.join(render_path, '{}'.format(view.image_name) + ".png"),(255*rendering).astype(np.uint8))
         
-        gt_image  = view.original_image[0:3, :, :]
-        gt_image = torch.permute(gt_image,(1,2,0))
-        gt_image = gt_image.detach().cpu().numpy()
-
+        # gt_image  = view.original_image[0:3, :, :]
+        # gt_image = torch.permute(gt_image,(1,2,0))
+        # gt_image = gt_image.detach().cpu().numpy()
+        
         # plt.imsave(os.path.join(gts_path, '{}'.format(view.image_name) + ".png"),(255*gt_image).astype(np.uint8))
+        
         # Compute psnr, ssim and lpips and write to file per image_name
-        psnr = compute_psnr(gt_image, rendering)
-        ssim = compute_ssim(gt_image, rendering)
-        lpips = compute_lpips(gt_image, rendering)
-        with open(os.path.join(model_path, name, "TogTest_{}".format(iteration), "metrics.txt"), "a") as f:
-            f.write(f"{view.image_name} PSNR: {psnr} SSIM: {ssim} LPIPS: {lpips}\n")
+        # psnr = compute_psnr(gt_image, rendering)
+        # ssim = compute_ssim(gt_image, rendering)
+        # lpips = compute_lpips(gt_image, rendering)
+        # with open(os.path.join(model_path, name, "TogTest_{}".format(iteration), "metrics.txt"), "a") as f:
+        #     f.write(f"{view.image_name} PSNR: {psnr} SSIM: {ssim} LPIPS: {lpips}\n")
 
 def render_set_raw(model_path, scene_path, name, iteration, views, gaussians, pipeline, background, is_affine_cc, is_cc):
     render_path_affine = os.path.join(model_path, name, "ours_{}".format(iteration), "renders_affine")
@@ -295,7 +296,11 @@ if __name__ == "__main__":
 
     args = get_combined_args(parser)
     print("Rendering " + args.model_path)
-
+    args.is_graded = False
+    args.is_raw = False
+    args.is_affine_cc = False
+    args.is_pure_graded = False
+    args.is_binary = False
     # Initialize system state (RNG)
     safe_state(args.quiet)
 
