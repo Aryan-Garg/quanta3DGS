@@ -34,7 +34,7 @@ def compare_ssim(img1, img2, channel_axis = 2):
 
 if __name__ == '__main__':
     print("Ours: QS (Temporal Smoothing graded):")
-    print(calc_metrics("/nobackup3/aryan/HDRSplat/output/moped2_graded_till1000_default/test/TogTest_50000/renders", 
+    print(calc_metrics("/nobackup3/aryan/HDRSplat/output/corrected_ours", 
                        "/nobackup3/aryan/dataset_moped2/gt/test/frames"))
     print("----------------------------------------------------------------------")
     print("Conventional Camera:")
